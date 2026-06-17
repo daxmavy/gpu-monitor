@@ -1,0 +1,17 @@
+{
+  "//": "Copy this to ~/.config/gpu-monitor/config.json (or set $GPUMON_CONFIG) and edit.",
+  "//hosts": "Your remote GPU servers. 'ssh' is the target passed to ssh — INCLUDE YOUR USERNAME (user@host). Passwordless SSH (keys) must already work.",
+  "hosts": [
+    { "name": "Server1", "ssh": "yourusername@gpu1.example.edu" },
+    { "name": "Server2", "ssh": "yourusername@gpu2.example.edu" }
+  ],
+
+  "//vpn": "OPTIONAL. Delete this whole block if the servers don't need a VPN. Only 'cisco' (Cisco Secure Client) is supported; 'network' is your VPN's internal IPv4 prefix used as a routing-table fallback.",
+  "vpn": {
+    "type": "cisco",
+    "binary": "/opt/cisco/secureclient/bin/vpn",
+    "app": "/Applications/Cisco/Cisco Secure Client.app",
+    "network": "10.0",
+    "label": "Cisco Secure Client"
+  }
+}

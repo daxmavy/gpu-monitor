@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "gpumon",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "uvicorn", "gpumon.server:app", "--host", "127.0.0.1", "--port", "8765"],
+      "port": 8765
+    }
+  ]
+}

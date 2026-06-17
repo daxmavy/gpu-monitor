@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Optional: start GPU Monitor automatically at login.
+  1. Replace __REPO__ below with this repo's absolute path
+     (e.g. /Users/you/gpu-monitor). Pick your own bundle id if you like.
+  2. cp this file to ~/Library/LaunchAgents/com.example.gpumonitor.plist
+  3. launchctl load ~/Library/LaunchAgents/com.example.gpumonitor.plist
+  Unload with: launchctl unload ~/Library/LaunchAgents/com.example.gpumonitor.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>            <string>com.example.gpumonitor</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__REPO__/.venv/bin/python</string>
+    <string>-m</string>
+    <string>macapp.menubar</string>
+  </array>
+  <key>WorkingDirectory</key>  <string>__REPO__</string>
+  <key>RunAtLoad</key>        <true/>
+  <key>KeepAlive</key>        <false/>
+  <key>StandardOutPath</key>  <string>/tmp/gpumon-menubar.log</string>
+  <key>StandardErrorPath</key><string>/tmp/gpumon-menubar.log</string>
+</dict>
+</plist>

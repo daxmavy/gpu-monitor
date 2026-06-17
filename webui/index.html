@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GPU Monitor</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="panel" id="panel">
+    <header class="topbar">
+      <div class="title">
+        <span class="dot" id="live-dot"></span> GPU Monitor
+      </div>
+      <div class="actions">
+        <span class="pill" id="vpn-pill">…</span>
+        <button class="iconbtn" id="alarm-btn" title="Alarm settings">&#x1F514;</button>
+        <button class="iconbtn" id="refresh-btn" title="Refresh now">&#x21BB;</button>
+      </div>
+    </header>
+
+    <div class="subbar">
+      <span id="updated">connecting…</span>
+      <span id="alarm-chip" class="alarm-chip hidden"></span>
+    </div>
+
+    <!-- VPN-down state -->
+    <section class="vpn-down hidden" id="vpn-down">
+      <div class="vpn-emoji">&#x1F512;</div>
+      <div class="vpn-msg">VPN not on</div>
+      <div class="vpn-sub" id="vpn-sub"></div>
+      <button class="primary" id="open-vpn">Open VPN client</button>
+    </section>
+
+    <!-- GPU content -->
+    <main id="content"></main>
+
+    <!-- Alarm settings -->
+    <section class="alarm-panel hidden" id="alarm-panel">
+      <div class="ap-head">
+        <label class="switch">
+          <input type="checkbox" id="al-enabled"> <span>Alarm enabled</span>
+        </label>
+        <button class="iconbtn" id="alarm-close" title="Close">&#x2715;</button>
+      </div>
+
+      <div class="ap-modes">
+        <label><input type="radio" name="al-mode" value="idle"> Any GPU becomes <b>fully idle</b></label>
+        <label><input type="radio" name="al-mode" value="vram"> Free VRAM &ge;
+          <input type="number" id="al-vram" min="1" max="80" value="40" class="num"> GB</label>
+        <label><input type="radio" name="al-mode" value="specific"> Specific GPUs become idle:</label>
+        <div id="al-specific" class="specific"></div>
+        <button class="ghost small" id="al-add-rule">+ add GPU type</button>
+      </div>
+
+      <div class="ap-hosts">
+        <span class="ap-label">Watch hosts:</span>
+        <span id="al-hosts"></span>
+      </div>
+
+      <div class="ap-foot">
+        <button class="ghost small" id="al-test">Test notification</button>
+        <button class="primary small" id="al-save">Save</button>
+      </div>
+      <div class="ap-status" id="al-savestatus"></div>
+    </section>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>
