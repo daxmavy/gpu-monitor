@@ -39,9 +39,15 @@ for item in gpumon webui macapp pyproject.toml config.example.json README.md; do
 done
 find "$RES/app" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
 
-echo "→ bundling uv ($(command -v uv))"
-cp "$(command -v uv)" "$RES/uv"
-chmod +x "$RES/uv"
+UV_VER="${UV_VER:-0.9.0}"
+echo "→ bundling uv ${UV_VER} for both arches (no uv needed on the target Mac)"
+for pair in "aarch64:arm64" "x86_64:x86_64"; do
+  ut="${pair%%:*}"; an="${pair##*:}"
+  url="https://github.com/astral-sh/uv/releases/download/${UV_VER}/uv-${ut}-apple-darwin.tar.gz"
+  curl -fsSL "$url" | tar -xz -C "$RES" --strip-components=1 "uv-${ut}-apple-darwin/uv"
+  mv "$RES/uv" "$RES/uv-${an}"
+  chmod +x "$RES/uv-${an}"
+done
 
 echo "→ writing launcher"
 cat > "$APP/Contents/MacOS/gpu-monitor" <<'LAUNCH'
@@ -50,7 +56,11 @@ cat > "$APP/Contents/MacOS/gpu-monitor" <<'LAUNCH'
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SRC="$HERE/../Resources/app"
-UV="$HERE/../Resources/uv"
+case "$(uname -m)" in
+  arm64)  UV="$HERE/../Resources/uv-arm64" ;;
+  x86_64) UV="$HERE/../Resources/uv-x86_64" ;;
+  *)      UV="" ;;
+esac
 SUPPORT="$HOME/Library/Application Support/gpu-monitor"
 VENV="$SUPPORT/venv"
 mkdir -p "$SUPPORT"
