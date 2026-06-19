@@ -1,113 +1,81 @@
 # GPU Monitor
 
-A macOS menu-bar monitor for your **remote GPU servers**. A small item sits in the
-menu bar; clicking it opens a popover with nvitop-style live state — no separate
-app to open. You point it at your own hosts (over SSH); it ships with no servers
-baked in.
+A macOS menu-bar app for the **Brains** and **Virgil** GPU servers. A small dot
+sits in the menu bar; click it for a live, nvitop-style view of every GPU — type,
+utilisation, memory, temperature, and who's running what — for both servers, with
+no separate window to open.
 
-## Setup
+## Install
 
-> **You must add your own hosts and username** — nothing is hardcoded.
+1. **Download** `GPU-Monitor.dmg` and open it; drag **GPU Monitor** to Applications.
+2. **First open** — because the app isn't signed by an Apple Developer account,
+   macOS will block it the first time. **Right-click the app → Open → Open.**
+   (Or remove the quarantine flag: `xattr -dr com.apple.quarantine "/Applications/GPU Monitor.app"`.)
+3. The **first launch sets itself up** (~1 minute, needs internet once) and a
+   **Setup window opens automatically**.
+4. In Setup: enter your **username**, tick **which servers** you have access to
+   (Brains / Virgil), connect the **VPN**, and **test SSH**. Each step has a
+   *"🪄 Have Claude Code set this up for me"* button that copies a ready-to-paste
+   prompt (e.g. to set up passwordless SSH) into a coding agent.
+5. Done — a **● appears at the top-right of your menu bar.** Click it.
 
-1. **Requirements**: macOS, [`uv`](https://docs.astral.sh/uv/), and **passwordless
-   SSH** (key-based) to each GPU server. The servers just need `nvidia-smi` and
-   `python3` (stdlib only — nothing is installed on them).
-2. **Install deps**: `uv sync`
-3. **Configure your hosts** — copy the example and edit it:
-   ```bash
-   mkdir -p ~/.config/gpu-monitor
-   cp config.example.json ~/.config/gpu-monitor/config.json
-   # edit it: set each host's "ssh" to your own user@host
-   ```
-   ```json
-   {
-     "hosts": [
-       { "name": "Server1", "ssh": "yourusername@gpu1.example.edu" },
-       { "name": "Server2", "ssh": "yourusername@gpu2.example.edu" }
-     ]
-   }
-   ```
-   The config is searched at `$GPUMON_CONFIG`, then `./gpu-monitor.json` (gitignored),
-   then `~/.config/gpu-monitor/config.json`. You can instead set
-   `GPUMON_HOSTS="Server1=you@gpu1.example.edu,Server2=you@gpu2.example.edu"`.
-4. **Run**: `./start.sh`
+> **Stuck on the Gatekeeper step?** Paste this into Claude Code:
+> *"macOS is blocking 'GPU Monitor.app' as unidentified. Remove its quarantine
+> flag with `xattr -dr com.apple.quarantine "/Applications/GPU Monitor.app"` and
+> open it."*
 
-If the servers sit behind a VPN, add an optional `"vpn"` block (see
-`config.example.json`); only Cisco Secure Client is supported. With no `"vpn"`
-block the tool never blocks on a VPN.
+## What it does
 
-## Run
+- **Live GPU view** — one row of cards per server (no scrolling): GPU type, util
+  + memory bars, temperature, and per-process **username**, **VRAM**, **runtime**,
+  and command.
+- **Rename people** — right-click a username in the popover and type their real
+  name; it replaces that username everywhere from then on (stored locally).
+- **Copy usernames** — the ⧉ button next to a name copies the raw username.
+- **Availability alarms** — banner + sound when a GPU frees up: any idle GPU
+  (default), free VRAM ≥ X GB, or specific types (e.g. 1×A100 + 2×H100).
+- **Colour-coded icon** — 🟢 when a whole 80GB GPU is free, 🔴 when no GPU has
+  >40GB free, 🟠 otherwise (⚪️ when the VPN is off). The number is idle-GPU count.
+- **15-minute utilisation sparkline** on each GPU card.
+- **Graceful VPN handling** — if the Oxford VPN is off, shows "VPN not on" with an
+  Open-client button instead of hanging.
+
+Right-click the menu-bar ● for **Setup…** (re-run the wizard) and **Quit**.
+
+## Run from source (development)
+
+Needs [`uv`](https://docs.astral.sh/uv/) and passwordless SSH to the servers.
 
 ```bash
-./start.sh            # menu-bar app (default) — a "● N" item appears top-right
+uv sync
+./start.sh            # menu-bar app (builds a dev .app and opens it)
 ./start.sh web        # web-only: serve the UI and open it in a browser
+uv run pytest         # tests: alarm logic, edge-firing, VPN gate, name store
 ```
 
-The menu-bar app starts its own local server (`127.0.0.1:8765`), so `./start.sh`
-is all you need. Left-click the menu-bar item to open the popover; right-click for
-a Quit menu.
+## Build the distributable
 
-> The menu-bar item must run in the GUI session — `start.sh` launches it as
-> `dist/GPU Monitor.app` via `open` (built by `build_app.sh`). To start it at
-> login, see [`macapp/gpumonitor.plist.template`](macapp/gpumonitor.plist.template).
+```bash
+./package.sh          # -> dist/GPU Monitor.app  +  dist/GPU-Monitor.dmg
+```
+`package.sh` bundles the source + a copy of `uv`; the app bootstraps its own Python
+environment on first launch, so the target Mac needs nothing preinstalled.
 
-## Features
+## Configuration
 
-- **Live feed from your servers** over SSH: GPU type (A100 / L40S / H100 / …),
-  utilisation, memory used/free, temperature, and per-process **username**,
-  **VRAM**, **runtime**, and command. Hosts are probed concurrently and laid out
-  one row of GPU cards per host (no scrolling).
-- **15-minute utilisation history** as a tiny sparkline on each GPU card.
-- **Colour-coded menu-bar icon**: 🟢 when an 80GB-class GPU is completely free,
-  🔴 when no GPU has more than 40GB free, 🟠 otherwise (⚪️ grey when a configured
-  VPN is off). The number is the count of idle GPUs.
-- **Usernames**: each process shows the owner. A **copy** button copies the raw
-  username. **Right-click a name** to type/paste the person's real name — it
-  replaces the username everywhere from then on (stored locally in `names.json`).
-- **Optional VPN gate**: if configured and the VPN is off, shows "VPN not on" with
-  an **Open VPN client** button, instead of hanging trying to reach the servers.
-- **Alarms** (macOS banner + sound, fired once on the rising edge):
-  - **any GPU becomes fully idle** (default),
-  - **free VRAM ≥ X GB**,
-  - **specific GPUs become idle** (e.g. 1×A100 + 2×H100),
-  - scoped to any host or all.
-
-## Performance (low latency, low background cost)
-
-- **Instant open**: the popover's webview stays warm and the server **embeds the
-  latest snapshot into the HTML** (`window.__INITIAL_STATE__`), so the UI paints
-  with data on open — no fetch wait, no spinner. The popover auto-sizes to content.
-- **Warm SSH**: a detached connection-multiplexing master per host means each
-  probe reuses one connection (~0.2s) instead of a fresh ~1.5s handshake.
-- **Adaptive polling**: fast (2s) only while the popover is open; slow (15s) when
-  closed. So the background cost is one light SSH probe per host every 15s plus a
-  couple of idle multiplex sockets. Tunable via `GPUMON_POLL_FAST` / `GPUMON_POLL_SLOW`.
+The setup wizard writes `~/.config/gpu-monitor/config.json`. You can also edit it by
+hand or point elsewhere with `$GPUMON_CONFIG`; see `config.example.json` for the
+schema (hosts as `user@host`, plus an optional `vpn` block). Tunables via env:
+`GPUMON_POLL_FAST`, `GPUMON_POLL_SLOW`, `GPUMON_PORT`. Local state (renamed names,
+alarm config) lives in `~/Library/Application Support/gpu-monitor/`.
 
 ## Architecture
 
-**Data (`gpumon/`)**
-- `probe.py` — runs *on* a server via `ssh <host> python3 -` (stdlib only); emits
-  one JSON snapshot of GPUs + processes. Owner/runtime come from `/proc` so
-  containerised jobs are attributed correctly.
-- `remote.py` — pipes the probe over SSH to all hosts concurrently (multiplexed);
-  failures become `reachable:false` instead of hanging.
-- `config.py` — loads hosts + optional VPN from your JSON config.
-- `vpn.py` — optional VPN-state check (+ routing-table fallback); opens the client.
-- `alarms.py` — alarm config, evaluation, and `osascript` notification.
-- `poller.py` — background loop: VPN → probe → evaluate alarms (edge-triggered) →
-  cache snapshot + 15-min history.
-- `server.py` — FastAPI: serves the web UI and a small JSON API.
-
-**UI (`webui/`)** — single HTML/CSS/JS app styled as a menu-bar dropdown.
-
-**Native wrapper (`macapp/menubar.py`)** — PyObjC `NSStatusItem` + `NSPopover` +
-`WKWebView` hosting the same web UI.
-
-Local state (renamed names, alarm config) lives in
-`~/Library/Application Support/gpu-monitor/`.
-
-## Tests
-
-```bash
-uv run pytest        # alarm evaluation, edge-triggered firing, VPN gate, name store
-```
+- **`gpumon/`** — data + server: `probe.py` runs on each host via `ssh … python3 -`
+  (stdlib only, nothing installed remotely); `remote.py` multiplexes SSH;
+  `poller.py` polls adaptively (fast while open, slow when closed) and keeps the
+  15-min history; `alarms.py`, `vpn.py`, `setup.py`, `presets.py`; `server.py`
+  (FastAPI) serves the UI + a small JSON API.
+- **`webui/`** — the popover UI (`index.html`) and the setup wizard (`setup.html`).
+- **`macapp/menubar.py`** — PyObjC `NSStatusItem` + `NSPopover` + `WKWebView`,
+  the auto-opening setup window, and the in-process server.

@@ -13,8 +13,5 @@
     "app": "/Applications/Cisco/Cisco Secure Client.app",
     "network": "10.0",
     "label": "Cisco Secure Client"
-  },
-
-  "//db_status_file": "OPTIONAL. Path to a results-DB backup status JSON (written by the thesis `python -m src.db` CLI). When present, the menu bar shows a 💾 indicator: in-sync state, total result rows, and unique experiment count. Defaults to ~/oxford/thesis/db/db_backup_status.json; can also be set via GPUMON_DB_STATUS_FILE.",
-  "db_status_file": "~/oxford/thesis/db/db_backup_status.json"
+  }
 }

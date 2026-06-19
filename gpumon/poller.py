@@ -10,20 +10,11 @@ Design goals: instant-feeling UI and low background cost.
 """
 from __future__ import annotations
 
-import json
 import threading
 import time
 from collections import deque
 
 from . import alarms, config, remote, vpn
-
-
-def _read_db_status() -> dict:
-    """Read the thesis results-DB backup status JSON (cheap, local, no SSH)."""
-    try:
-        return json.loads(config.DB_STATUS_FILE.read_text())
-    except (OSError, json.JSONDecodeError):
-        return {}
 
 FAST = config.POLL_FAST
 SLOW = config.POLL_SLOW
@@ -38,7 +29,6 @@ class Poller:
             "ts": 0, "vpn": {"state": "undetermined", "detail": "starting…"},
             "hosts": [], "alarm": {"matched": False, "message": "", "enabled": False},
             "badge": {"color": "gray", "vpn": False, "idle": 0, "free_max_gb": 0},
-            "backup": {},
         }
         self._prev_matched = False
         self._active = False
@@ -55,10 +45,6 @@ class Poller:
     def badge(self) -> dict:
         with self._lock:
             return dict(self._latest.get("badge") or {})
-
-    def backup_status(self) -> dict:
-        with self._lock:
-            return dict(self._latest.get("backup") or {})
 
     def rearm(self) -> None:
         self._prev_matched = False
@@ -124,7 +110,6 @@ class Poller:
             "alarm": {**ev, "enabled": bool(cfg.get("enabled")),
                       "mode": cfg.get("mode"), "fired": fired},
             "badge": alarms.availability_badge(hosts, v["state"]),
-            "backup": _read_db_status(),
             "active": self._active,
         }
         with self._lock:

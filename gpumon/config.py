@@ -59,13 +59,24 @@ def _hosts_from_env() -> list[dict]:
 
 
 # Remote GPU hosts: [{"name": "...", "ssh": "user@host"}]. From the config file,
-# else the GPUMON_HOSTS env var. Empty until the user configures their own.
-HOSTS = _CFG.get("hosts") or _hosts_from_env()
-CONFIGURED = bool(HOSTS)
+# else the GPUMON_HOSTS env var. Optional VPN gate (None -> never blocks on a VPN).
+# Recomputed by reload() after the setup wizard saves, so changes apply live.
+HOSTS: list[dict] = []
+VPN = None
+CONFIGURED = False
 
-# Optional VPN gate (e.g. a corporate/university VPN required to reach the hosts).
-# None -> the tool never blocks on a VPN. See vpn.py for the schema.
-VPN = _CFG.get("vpn") or None
+
+def reload() -> dict:
+    """Re-read the config file and refresh HOSTS / VPN / CONFIGURED in place."""
+    global _CFG, HOSTS, VPN, CONFIGURED
+    _CFG = _load()
+    HOSTS = _CFG.get("hosts") or _hosts_from_env()
+    VPN = _CFG.get("vpn") or None
+    CONFIGURED = bool(HOSTS)
+    return _CFG
+
+
+reload()
 
 # Adaptive polling cadence (seconds): fast while the popover is open, slow when
 # closed (keeps background cost low). The menu-bar app flips the active flag.
@@ -78,16 +89,6 @@ SSH_TIMEOUT = float(os.environ.get("GPUMON_SSH_TIMEOUT", "25"))
 # Local HTTP bind.
 HOST = os.environ.get("GPUMON_HOST", "127.0.0.1")
 PORT = int(os.environ.get("GPUMON_PORT", "8765"))
-
-# Optional: path to the thesis results-DB backup status JSON. Written by
-# `python -m src.db {ingest,backfill,backup,status}`; read locally (no SSH) so
-# the menu bar can show DB sync state, row count and experiment count. Override
-# via GPUMON_DB_STATUS_FILE, the config key "db_status_file", or leave default.
-DB_STATUS_FILE = Path(
-    os.environ.get("GPUMON_DB_STATUS_FILE")
-    or _CFG.get("db_status_file")
-    or (Path.home() / "oxford" / "thesis" / "db" / "db_backup_status.json")
-).expanduser()
 
 # Local persistent state (username->real-name map, alarm config).
 STATE_DIR = Path(os.environ.get(

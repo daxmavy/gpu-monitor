@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GPU Monitor — Setup</title>
+  <style>
+    :root {
+      --bg: #16161a; --panel: #232329; --card: #2b2b32; --card-hi: #313139;
+      --text: #ececf0; --sub: #9a9aa6; --faint: #6c6c78; --line: #38383f;
+      --accent: #4ea1ff; --green: #36c46f; --amber: #ffb13b; --red: #ff5f57;
+      --mono: ui-monospace, "SF Mono", Menlo, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: var(--sans); color: var(--text);
+      background: radial-gradient(1100px 500px at 50% -8%, #2a2a31, #131316);
+      min-height: 100vh; padding: 30px 18px 60px; -webkit-font-smoothing: antialiased;
+    }
+    .wizard { max-width: 620px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 22px; }
+    .logo { width: 46px; height: 46px; border-radius: 12px; margin: 0 auto 10px;
+      background: linear-gradient(150deg, #36c46f, #2a7d4d); display: flex;
+      align-items: center; justify-content: center; font-size: 24px;
+      box-shadow: 0 6px 20px rgba(54,196,111,.35); }
+    h1 { font-size: 22px; margin: 0; font-weight: 700; }
+    .tagline { color: var(--sub); font-size: 13.5px; margin: 6px 0 0; }
+
+    .card { background: var(--panel); border: 1px solid var(--line);
+      border-radius: 14px; padding: 18px 18px; margin-bottom: 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+    .card.locked { opacity: .45; pointer-events: none; filter: saturate(.5); }
+    .step-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .num { width: 24px; height: 24px; border-radius: 50%; background: var(--card-hi);
+      color: var(--sub); font-size: 13px; font-weight: 700; display: flex;
+      align-items: center; justify-content: center; flex: none; }
+    .step.done .num { background: rgba(54,196,111,.18); color: var(--green); }
+    h2 { font-size: 15.5px; margin: 0; font-weight: 650; }
+    .card p { color: var(--sub); font-size: 13px; line-height: 1.5; margin: 4px 0 12px; }
+    code { font-family: var(--mono); font-size: 12px; background: var(--card); padding: 1px 5px;
+      border-radius: 4px; color: var(--text); }
+
+    input[type=text], input:not([type]) {
+      width: 100%; background: #15151a; color: var(--text); border: 1px solid var(--line);
+      border-radius: 9px; padding: 10px 12px; font: inherit; font-size: 14px; outline: none; }
+    input:focus { border-color: var(--accent); }
+
+    label.server { display: flex; align-items: center; gap: 10px; padding: 11px 12px;
+      border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; cursor: pointer;
+      background: var(--card); transition: border-color .15s; }
+    label.server:hover { border-color: var(--faint); }
+    label.server:has(input:checked) { border-color: var(--accent); background: var(--card-hi); }
+    label.server input { width: 17px; height: 17px; accent-color: var(--accent); flex: none; }
+    label.server b { font-size: 14px; }
+    label.server .gpus { color: var(--faint); font-size: 12px; font-family: var(--mono); margin-left: auto; }
+
+    .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    button { font: inherit; cursor: pointer; border-radius: 9px; }
+    button.primary { background: var(--accent); color: #fff; border: 0; padding: 10px 16px;
+      font-weight: 650; font-size: 14px; margin-top: 12px; }
+    button.primary:hover { filter: brightness(1.08); }
+    button.ghost { background: transparent; border: 1px solid var(--line); color: var(--sub);
+      padding: 8px 13px; font-size: 13px; }
+    button.ghost:hover { color: var(--text); border-color: var(--faint); }
+    button.ghost.small { padding: 5px 10px; font-size: 12px; }
+
+    .status { font-size: 12.5px; color: var(--sub); margin-top: 8px; min-height: 16px; }
+    .status.ok { color: var(--green); } .status.bad { color: var(--red); }
+    .status.warn { color: var(--amber); }
+
+    .ssh-host { display: flex; align-items: center; gap: 10px; padding: 9px 0;
+      border-top: 1px solid var(--line); font-size: 13px; }
+    .ssh-host:first-child { border-top: 0; }
+    .ssh-host .tgt { font-family: var(--mono); font-size: 12px; color: var(--sub); }
+    .ssh-host .res { margin-left: auto; font-size: 12px; }
+    .ssh-host .res.ok { color: var(--green); } .ssh-host .res.bad { color: var(--red); }
+
+    details.prompt { margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 12px; }
+    details.prompt summary { cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 600;
+      list-style: none; }
+    details.prompt summary::-webkit-details-marker { display: none; }
+    details.prompt p { margin: 10px 0 8px; font-size: 12px; }
+    pre { background: #15151a; border: 1px solid var(--line); border-radius: 9px; padding: 11px 12px;
+      font-family: var(--mono); font-size: 11.5px; line-height: 1.5; color: #cdd2dc;
+      white-space: pre-wrap; word-break: break-word; margin: 0 0 8px; max-height: 230px; overflow: auto; }
+
+    .features ul { list-style: none; padding: 0; margin: 6px 0 0; }
+    .features li { padding: 9px 0; border-top: 1px solid var(--line); font-size: 13px; color: var(--sub); line-height: 1.5; }
+    .features li:first-child { border-top: 0; }
+    .features li b { color: var(--text); }
+    .features li.highlight { background: rgba(78,161,255,.08); border-radius: 8px; padding: 11px 12px;
+      border: 1px solid rgba(78,161,255,.25); margin: 6px 0; }
+    .hint { font-size: 12px; color: var(--faint); margin-top: 6px; }
+    .copied { color: var(--green) !important; }
+  </style>
+</head>
+<body>
+  <div class="wizard">
+    <header>
+      <div class="logo">●</div>
+      <h1>GPU Monitor</h1>
+      <p class="tagline">Live GPU monitoring for Brains &amp; Virgil, right in your menu bar.</p>
+    </header>
+
+    <section class="card step" id="step-user">
+      <div class="step-head"><span class="num">1</span><h2>Your username</h2></div>
+      <p>The username you use to log into the servers over SSH (your Oxford SSO username).</p>
+      <input type="text" id="username" placeholder="e.g. abcd1234" autocomplete="off" spellcheck="false">
+    </section>
+
+    <section class="card step" id="step-servers">
+      <div class="step-head"><span class="num">2</span><h2>Which servers do you have access to?</h2></div>
+      <p>Tick the ones you can already SSH into. You can change this later.</p>
+      <div id="servers"></div>
+      <button class="primary" id="save">Save &amp; continue</button>
+      <div class="status" id="save-status"></div>
+    </section>
+
+    <section class="card step locked" id="step-vpn">
+      <div class="step-head"><span class="num">3</span><h2>Connect the VPN</h2></div>
+      <p id="vpn-desc">The servers are only reachable on the Oxford VPN.</p>
+      <div class="row">
+        <button class="ghost" id="check-vpn">Check VPN</button>
+        <button class="ghost" id="open-vpn">Open VPN client</button>
+        <span class="status" id="vpn-status"></span>
+      </div>
+      <details class="prompt">
+        <summary>🪄 Have Claude Code set this up for me</summary>
+        <p>Paste this into Claude Code (or any coding agent) and it'll handle it:</p>
+        <pre id="prompt-vpn"></pre>
+        <button class="ghost small copy-prompt" data-target="prompt-vpn">Copy prompt</button>
+      </details>
+    </section>
+
+    <section class="card step locked" id="step-ssh">
+      <div class="step-head"><span class="num">4</span><h2>Passwordless SSH</h2></div>
+      <p>The app reads each server with <code>nvidia-smi</code> over SSH, using a key so it
+        never asks for a password. Test each server — if it fails, the prompt below fixes it.</p>
+      <div id="ssh-hosts"></div>
+      <details class="prompt">
+        <summary>🪄 Have Claude Code set this up for me</summary>
+        <p>Paste this into Claude Code (run it on this Mac, while on the VPN):</p>
+        <pre id="prompt-ssh"></pre>
+        <button class="ghost small copy-prompt" data-target="prompt-ssh">Copy prompt</button>
+      </details>
+    </section>
+
+    <section class="card features locked" id="step-done">
+      <h2>You're all set 🎉</h2>
+      <p>Open GPU Monitor any time from the <b>●</b> near the top-right of your menu bar.
+        A few things it does:</p>
+      <ul>
+        <li class="highlight"><b>✏️ Rename people</b> — right-click any username in the popover and
+          type their real name. It replaces that username everywhere, for good.</li>
+        <li><b>Copy usernames</b> — the ⧉ button next to a name copies the raw username.</li>
+        <li><b>Availability alarms</b> — get a banner + sound when a GPU frees up (any idle GPU,
+          ≥ X GB free, or specific types like 1×A100 + 2×H100). Open the 🔔 in the popover.</li>
+        <li><b>Menu-bar colour</b> — the dot is 🟢 when a whole 80GB GPU is free, 🔴 when nothing is,
+          🟠 in between. The number is how many GPUs are idle.</li>
+        <li><b>15-minute sparklines</b> — recent utilisation on every GPU card.</li>
+      </ul>
+      <button class="primary" id="finish">Open GPU Monitor</button>
+      <div class="hint" id="finish-hint"></div>
+    </section>
+  </div>
+  <script src="/setup.js"></script>
+</body>
+</html>

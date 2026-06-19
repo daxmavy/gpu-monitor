@@ -19,10 +19,12 @@ import urllib.request
 import objc
 from AppKit import (
     NSApp, NSApplication, NSApplicationActivationPolicyAccessory,
-    NSAttributedString, NSColor, NSEventMaskLeftMouseUp, NSEventMaskRightMouseUp,
-    NSEventTypeRightMouseUp, NSForegroundColorAttributeName, NSMenu, NSMenuItem,
-    NSPopover, NSPopoverBehaviorTransient, NSStatusBar, NSVariableStatusItemLength,
-    NSViewController,
+    NSApplicationActivationPolicyRegular, NSAttributedString, NSBackingStoreBuffered,
+    NSColor, NSEventMaskLeftMouseUp, NSEventMaskRightMouseUp, NSEventTypeRightMouseUp,
+    NSForegroundColorAttributeName, NSMenu, NSMenuItem, NSPopover,
+    NSPopoverBehaviorTransient, NSStatusBar, NSVariableStatusItemLength,
+    NSViewController, NSWindow, NSWindowStyleMaskClosable, NSWindowStyleMaskResizable,
+    NSWindowStyleMaskTitled,
 )
 from Foundation import (
     NSMakeRect, NSMakeSize, NSObject, NSTimer, NSURL, NSURLRequest,
@@ -79,23 +81,6 @@ def _fetch_badge() -> dict | None:
         return None
 
 
-def _fetch_backup() -> dict | None:
-    try:
-        with urllib.request.urlopen(BASE + "/api/backup", timeout=2) as r:
-            return json.load(r)
-    except Exception:  # noqa: BLE001
-        return None
-
-
-def _human(n) -> str:
-    n = int(n or 0)
-    if n >= 1_000_000:
-        return f"{n / 1_000_000:.1f}M"
-    if n >= 1_000:
-        return f"{n / 1_000:.1f}k"
-    return str(n)
-
-
 # ---------- app ----------
 class AppDelegate(NSObject):
     def applicationDidFinishLaunching_(self, _notification):
@@ -122,13 +107,20 @@ class AppDelegate(NSObject):
         vc.setView_(self.web)
         self.popover.setContentViewController_(vc)
 
-        # quit menu (shown on right-click)
+        # right-click menu
         self.menu = NSMenu.alloc().init()
         self.menu.addItem_(NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
-            "Refresh", "openPopover:", ""))
+            "Open GPU Monitor", "openPopover:", ""))
+        self.menu.addItem_(NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Setup…", "openSetup:", ""))
         self.menu.addItem_(NSMenuItem.separatorItem())
         self.menu.addItem_(NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
             "Quit GPU Monitor", "terminate:", "q"))
+
+        self.setup_win = None
+        # first run (or forced): open the setup wizard window automatically
+        if not config.CONFIGURED or os.environ.get("GPUMON_FORCE_SETUP"):
+            self._open_setup_window()
 
         # periodic title refresh (cheap cached /api/badge read)
         self._refresh_title()
@@ -198,13 +190,6 @@ class AppDelegate(NSObject):
             col = cmap.get(b.get("color", "gray"), NSColor.secondaryLabelColor())
             text = f"● {b.get('idle', 0)}"
 
-        # Results-DB backup indicator: 💾✓/✗ <rows>/<experiments>. Only shown
-        # when a status file exists (i.e. the thesis DB is in use on this Mac).
-        bk = _fetch_backup()
-        if bk and bk.get("unique_experiment_count") is not None:
-            sync = "✓" if bk.get("in_sync") else "✗"
-            text += f"  💾{sync} {_human(bk.get('local_row_count'))}/{bk.get('unique_experiment_count', 0)}"
-
         attr = NSAttributedString.alloc().initWithString_attributes_(
             text, {NSForegroundColorAttributeName: col})
         self.statusItem.button().setAttributedTitle_(attr)
@@ -212,13 +197,57 @@ class AppDelegate(NSObject):
     def tick_(self, _timer):
         self._refresh_title()
 
-    # the web UI posts its content height; size the popover to it (no scroll, no gap)
+    # web -> native messages: "resize" (popover height) and "setup" (wizard done)
     def userContentController_didReceiveScriptMessage_(self, _ucc, message):
+        if message.name() == "setup":
+            self._finish_setup()
+            return
         try:
             h = max(220.0, min(1000.0, float(message.body())))
             self.popover.setContentSize_(NSMakeSize(POPOVER_WIDTH, h))
         except Exception:  # noqa: BLE001
             pass
+
+    # -- setup wizard window --
+    @objc.python_method
+    def _open_setup_window(self):
+        if self.setup_win is not None:
+            self.setup_win.makeKeyAndOrderFront_(None)
+            NSApp.activateIgnoringOtherApps_(True)
+            return
+        NSApp.setActivationPolicy_(NSApplicationActivationPolicyRegular)  # real window + focus
+        rect = NSMakeRect(0, 0, 700, 780)
+        mask = (NSWindowStyleMaskTitled | NSWindowStyleMaskClosable
+                | NSWindowStyleMaskResizable)
+        win = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+            rect, mask, NSBackingStoreBuffered, False)
+        win.setTitle_("GPU Monitor — Setup")
+        win.setReleasedWhenClosed_(False)
+        win.setDelegate_(self)
+        conf = WKWebViewConfiguration.alloc().init()
+        conf.userContentController().addScriptMessageHandler_name_(self, "setup")
+        web = WKWebView.alloc().initWithFrame_configuration_(rect, conf)
+        web.loadRequest_(NSURLRequest.requestWithURL_(
+            NSURL.URLWithString_(BASE + "/setup")))
+        win.setContentView_(web)
+        win.center()
+        win.makeKeyAndOrderFront_(None)
+        NSApp.activateIgnoringOtherApps_(True)
+        self.setup_win = win
+
+    def openSetup_(self, _sender):
+        self._open_setup_window()
+
+    @objc.python_method
+    def _finish_setup(self):
+        if self.setup_win is not None:
+            self.setup_win.close()      # triggers windowWillClose_ -> Accessory
+        self._refresh_title()
+        self._toggle_popover()          # show the working app
+
+    def windowWillClose_(self, _notification):
+        self.setup_win = None
+        NSApp.setActivationPolicy_(NSApplicationActivationPolicyAccessory)
 
     # -- popover open/close drive the server's poll cadence (fast vs slow) --
     @objc.python_method

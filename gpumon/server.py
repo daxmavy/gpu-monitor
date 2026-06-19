@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import alarms, config, names, vpn
+from . import alarms, config, names, presets, setup, vpn
 from .poller import poller
 
 
@@ -66,12 +66,6 @@ def get_badge():
     return poller.badge()
 
 
-@app.get("/api/backup")
-def get_backup():
-    """Thesis results-DB backup status (in_sync, row count, experiment count)."""
-    return poller.backup_status()
-
-
 @app.post("/api/active")
 def set_active(on: int = 1):
     poller.set_active(bool(on))
@@ -106,6 +100,52 @@ def test_alarm():
 @app.post("/api/vpn/open")
 def open_vpn():
     return vpn.open_vpn_client()
+
+
+# ---------- setup wizard ----------
+@app.get("/setup", response_class=HTMLResponse)
+def setup_page():
+    return HTMLResponse((config.WEBUI_DIR / "setup.html").read_text())
+
+
+@app.get("/api/setup/info")
+def setup_info():
+    return {
+        "hosts": presets.KNOWN_HOSTS,
+        "vpn": presets.KNOWN_VPN,
+        "configured": config.CONFIGURED,
+        "config_file": str(config.CONFIG_FILE),
+        **setup.current(),
+    }
+
+
+class SetupBody(BaseModel):
+    username: str
+    hosts: list[str]
+
+
+@app.post("/api/setup/save")
+def setup_save(body: SetupBody):
+    data = setup.save_config(body.username, body.hosts)
+    poller.rearm()
+    poller.set_active(True)
+    snap = poller.poll_once()       # re-probe immediately with the new config
+    return {"ok": True, "configured": config.CONFIGURED, "saved": data,
+            "vpn": snap.get("vpn")}
+
+
+@app.get("/api/setup/vpn")
+def setup_vpn():
+    return vpn.vpn_status()
+
+
+class SshBody(BaseModel):
+    target: str
+
+
+@app.post("/api/setup/ssh")
+def setup_ssh(body: SshBody):
+    return setup.test_ssh(body.target)
 
 
 @app.post("/api/refresh")
