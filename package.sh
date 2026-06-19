@@ -23,8 +23,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key><string>GPU Monitor</string>
   <key>CFBundleDisplayName</key><string>GPU Monitor</string>
   <key>CFBundleIdentifier</key><string>${BUNDLE_ID}</string>
-  <key>CFBundleVersion</key><string>0.1</string>
-  <key>CFBundleShortVersionString</key><string>0.1</string>
+  <key>CFBundleVersion</key><string>0.1.1</string>
+  <key>CFBundleShortVersionString</key><string>0.1.1</string>
   <key>CFBundleExecutable</key><string>gpu-monitor</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSUIElement</key><true/>
@@ -49,10 +49,17 @@ for pair in "aarch64:arm64" "x86_64:x86_64"; do
   chmod +x "$RES/uv-${an}"
 done
 
+echo "→ building setup-progress helper (universal)"
+swiftc -swift-version 5 -O -target arm64-apple-macos11  macapp/setup_progress.swift -o "$RES/sp-arm64"
+swiftc -swift-version 5 -O -target x86_64-apple-macos11 macapp/setup_progress.swift -o "$RES/sp-x86_64"
+lipo -create "$RES/sp-arm64" "$RES/sp-x86_64" -o "$RES/setup-progress"
+rm -f "$RES/sp-arm64" "$RES/sp-x86_64"
+chmod +x "$RES/setup-progress"
+
 echo "→ writing launcher"
 cat > "$APP/Contents/MacOS/gpu-monitor" <<'LAUNCH'
 #!/bin/bash
-# First-run bootstrap, then launch the menu-bar app.
+# First-run bootstrap (with a progress window), then launch the menu-bar app.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SRC="$HERE/../Resources/app"
@@ -61,34 +68,57 @@ case "$(uname -m)" in
   x86_64) UV="$HERE/../Resources/uv-x86_64" ;;
   *)      UV="" ;;
 esac
+PROG="$HERE/../Resources/setup-progress"
 SUPPORT="$HOME/Library/Application Support/gpu-monitor"
 VENV="$SUPPORT/venv"
 mkdir -p "$SUPPORT"
+rm -f "$SUPPORT/setup-progress.pid"
 exec >>"$SUPPORT/launch.log" 2>&1
 echo "=== launch $(date) ==="
 
-note() { osascript -e "display notification \"$1\" with title \"GPU Monitor\"" >/dev/null 2>&1 || true; }
-fail() { osascript -e "display dialog \"GPU Monitor setup failed.\n\n$1\n\nSee: $SUPPORT/launch.log\" buttons {\"OK\"} with icon stop" >/dev/null 2>&1 || true; exit 1; }
+PROG_PID=""
+prog() { :; }                                    # no-op until the progress window is up
+stop_prog() { [ -n "$PROG_PID" ] && kill "$PROG_PID" 2>/dev/null; }
+fail() {
+  stop_prog
+  osascript -e "display dialog \"GPU Monitor setup failed.\n\n$1\n\nSee: $SUPPORT/launch.log\" buttons {\"OK\"} with icon stop" >/dev/null 2>&1 || true
+  exit 1
+}
 
-# Pick a working uv: bundled → on PATH → install it.
-if ! "$UV" --version >/dev/null 2>&1; then
-  UV="$(command -v uv || true)"
-  [ -x "$HOME/.local/bin/uv" ] && UV="$HOME/.local/bin/uv"
-  if [ -z "${UV:-}" ] || ! "$UV" --version >/dev/null 2>&1; then
-    note "Installing dependencies (first launch)…"
-    curl -LsSf https://astral.sh/uv/install.sh | sh || fail "Could not install uv."
-    UV="$HOME/.local/bin/uv"
-  fi
-fi
-
-# Bootstrap the venv on first run (downloads Python + libs; needs internet once).
+# First run: build the Python env. Show a progress window the whole time — the
+# menu-bar app dismisses it the instant its own window appears (so there's never
+# a stretch with nothing on screen).
 if [ ! -x "$VENV/bin/python" ]; then
-  note "Setting up on first launch — about a minute…"
+  if [ -x "$PROG" ]; then
+    PIPE="$(mktemp -u)"; mkfifo "$PIPE"
+    "$PROG" < "$PIPE" >/dev/null 2>&1 &
+    PROG_PID=$!
+    exec 4>"$PIPE"; rm -f "$PIPE"               # fd 4 stays open across exec -> helper lives on
+    echo "$PROG_PID" > "$SUPPORT/setup-progress.pid"
+    prog() { printf '%s\n' "$*" >&4 2>/dev/null || true; }
+  fi
+
+  prog "STATUS Preparing…"; prog "PROGRESS 12"
+
+  # Pick a working uv: bundled (by arch) → on PATH → install it.
+  if [ -z "${UV:-}" ] || ! "$UV" --version >/dev/null 2>&1; then
+    UV="$(command -v uv || true)"; [ -x "$HOME/.local/bin/uv" ] && UV="$HOME/.local/bin/uv"
+    if [ -z "${UV:-}" ] || ! "$UV" --version >/dev/null 2>&1; then
+      prog "STATUS Installing uv…"; prog "PULSE"
+      curl -LsSf https://astral.sh/uv/install.sh | sh || fail "Could not install uv."
+      UV="$HOME/.local/bin/uv"
+    fi
+  fi
+
+  prog "STATUS Setting up Python…"; prog "PROGRESS 38"
   "$UV" venv "$VENV" --python 3.11 || fail "Could not create the Python environment."
+
+  prog "STATUS Installing libraries…"; prog "PULSE"
   "$UV" pip install --python "$VENV/bin/python" \
     fastapi "uvicorn[standard]" pyobjc-framework-Cocoa pyobjc-framework-WebKit \
     || fail "Could not install Python dependencies (no internet?)."
-  note "Ready! Opening setup…"
+
+  prog "STATUS Starting GPU Monitor…"; prog "PROGRESS 99"
 fi
 
 cd "$SRC"

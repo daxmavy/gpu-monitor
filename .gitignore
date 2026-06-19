@@ -8,3 +8,6 @@ dist/
 
 # user config override (keep your username/hosts out of git)
 gpu-monitor.json
+
+# offline/online resume note (local only — never publish to the public repo)
+RESUME_STATE.md

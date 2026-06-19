@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import threading
 import time
 import urllib.request
@@ -122,6 +123,11 @@ class AppDelegate(NSObject):
         if not config.CONFIGURED or os.environ.get("GPUMON_FORCE_SETUP"):
             self._open_setup_window()
 
+        # our real UI now exists — dismiss the launcher's first-launch progress
+        # window (small delay so the setup webview paints first; no gap on screen)
+        NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            0.6, self, "dismissProgress:", None, False)
+
         # periodic title refresh (cheap cached /api/badge read)
         self._refresh_title()
         self.timer = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
@@ -196,6 +202,22 @@ class AppDelegate(NSObject):
 
     def tick_(self, _timer):
         self._refresh_title()
+
+    def dismissProgress_(self, _timer):
+        self._dismiss_setup_progress()
+
+    @objc.python_method
+    def _dismiss_setup_progress(self):
+        """Kill the launcher's first-launch progress window (if any)."""
+        pidf = config.STATE_DIR / "setup-progress.pid"
+        try:
+            os.kill(int(pidf.read_text().strip()), signal.SIGTERM)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            pidf.unlink()
+        except Exception:  # noqa: BLE001
+            pass
 
     # web -> native messages: "resize" (popover height) and "setup" (wizard done)
     def userContentController_didReceiveScriptMessage_(self, _ucc, message):
