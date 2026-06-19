@@ -79,6 +79,16 @@ SSH_TIMEOUT = float(os.environ.get("GPUMON_SSH_TIMEOUT", "25"))
 HOST = os.environ.get("GPUMON_HOST", "127.0.0.1")
 PORT = int(os.environ.get("GPUMON_PORT", "8765"))
 
+# Optional: path to the thesis results-DB backup status JSON. Written by
+# `python -m src.db {ingest,backfill,backup,status}`; read locally (no SSH) so
+# the menu bar can show DB sync state, row count and experiment count. Override
+# via GPUMON_DB_STATUS_FILE, the config key "db_status_file", or leave default.
+DB_STATUS_FILE = Path(
+    os.environ.get("GPUMON_DB_STATUS_FILE")
+    or _CFG.get("db_status_file")
+    or (Path.home() / "oxford" / "thesis" / "db" / "db_backup_status.json")
+).expanduser()
+
 # Local persistent state (username->real-name map, alarm config).
 STATE_DIR = Path(os.environ.get(
     "GPUMON_STATE_DIR",

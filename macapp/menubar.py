@@ -79,6 +79,23 @@ def _fetch_badge() -> dict | None:
         return None
 
 
+def _fetch_backup() -> dict | None:
+    try:
+        with urllib.request.urlopen(BASE + "/api/backup", timeout=2) as r:
+            return json.load(r)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _human(n) -> str:
+    n = int(n or 0)
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.1f}k"
+    return str(n)
+
+
 # ---------- app ----------
 class AppDelegate(NSObject):
     def applicationDidFinishLaunching_(self, _notification):
@@ -180,6 +197,14 @@ class AppDelegate(NSObject):
         else:
             col = cmap.get(b.get("color", "gray"), NSColor.secondaryLabelColor())
             text = f"● {b.get('idle', 0)}"
+
+        # Results-DB backup indicator: 💾✓/✗ <rows>/<experiments>. Only shown
+        # when a status file exists (i.e. the thesis DB is in use on this Mac).
+        bk = _fetch_backup()
+        if bk and bk.get("unique_experiment_count") is not None:
+            sync = "✓" if bk.get("in_sync") else "✗"
+            text += f"  💾{sync} {_human(bk.get('local_row_count'))}/{bk.get('unique_experiment_count', 0)}"
+
         attr = NSAttributedString.alloc().initWithString_attributes_(
             text, {NSForegroundColorAttributeName: col})
         self.statusItem.button().setAttributedTitle_(attr)

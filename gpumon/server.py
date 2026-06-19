@@ -66,6 +66,12 @@ def get_badge():
     return poller.badge()
 
 
+@app.get("/api/backup")
+def get_backup():
+    """Thesis results-DB backup status (in_sync, row count, experiment count)."""
+    return poller.backup_status()
+
+
 @app.post("/api/active")
 def set_active(on: int = 1):
     poller.set_active(bool(on))
